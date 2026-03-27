@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   FileText,
@@ -42,8 +43,11 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
+  useAddShowcaseImage,
   useDeleteLead,
+  useDeleteShowcaseImage,
   useGetAllLeads,
+  useGetAllShowcaseImages,
   useSubmitInquiry,
 } from "./hooks/useQueries";
 
@@ -764,6 +768,88 @@ function FeaturedProducts() {
   );
 }
 
+// ─── ProductTouchDown ─────────────────────────────────────────────────────
+const FALLBACK_SHOWCASE_IMAGES = [
+  {
+    url: "https://placehold.co/300x200/1a1a2e/ffffff?text=Kamagra",
+    caption: "Kamagra",
+  },
+  {
+    url: "https://placehold.co/300x200/16213e/ffffff?text=Vidalista",
+    caption: "Vidalista",
+  },
+  {
+    url: "https://placehold.co/300x200/0f3460/ffffff?text=Cenforce",
+    caption: "Cenforce",
+  },
+  {
+    url: "https://placehold.co/300x200/533483/ffffff?text=Cialis",
+    caption: "Cialis",
+  },
+  {
+    url: "https://placehold.co/300x200/1a1a2e/ffffff?text=Generic+ED",
+    caption: "Generic ED",
+  },
+];
+
+function ProductTouchDown() {
+  const { data: imageData } = useGetAllShowcaseImages();
+
+  const images =
+    imageData && imageData.length > 0
+      ? imageData.map(([, img]) => ({ url: img.url, caption: img.caption }))
+      : FALLBACK_SHOWCASE_IMAGES;
+
+  const looped = [...images, ...images];
+
+  return (
+    <section className="py-16" style={{ background: "oklch(0.08 0.025 258)" }}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-10 text-center">
+        <p
+          className="text-xs font-bold uppercase tracking-widest mb-2"
+          style={{ color: "oklch(0.62 0.088 195)" }}
+        >
+          Featured Range
+        </p>
+        <h2 className="text-3xl font-extrabold uppercase tracking-tight text-white">
+          Product TouchDown
+        </h2>
+        <p className="text-white/50 text-sm mt-2">
+          Our Premium ED Product Range
+        </p>
+      </div>
+
+      <div className="overflow-hidden">
+        <div className="flex gap-6 w-max animate-marquee">
+          {looped.map((img, i) => (
+            <div
+              key={`${img.url}-${i}`}
+              className="flex flex-col items-center flex-shrink-0"
+              style={{ width: 280 }}
+            >
+              <img
+                src={img.url}
+                alt={img.caption}
+                className="rounded-xl object-cover shadow-lg"
+                style={{ width: 280, height: 180 }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src =
+                    "https://placehold.co/300x200/1a1a2e/ffffff?text=Product";
+                }}
+              />
+              {img.caption && (
+                <span className="mt-2 text-xs text-white/60 text-center truncate max-w-full px-2">
+                  {img.caption}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ─── Commitment ───────────────────────────────────────────────────────────────
 function CommitmentSection() {
   const items = [
@@ -1137,6 +1223,40 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const { data: leads, isLoading } = useGetAllLeads();
   const deleteMutation = useDeleteLead();
   const [search, setSearch] = useState("");
+  const { data: showcaseImages, isLoading: imagesLoading } =
+    useGetAllShowcaseImages();
+  const addImageMutation = useAddShowcaseImage();
+  const deleteImageMutation = useDeleteShowcaseImage();
+  const [newImageUrl, setNewImageUrl] = useState("");
+  const [newImageLabel, setNewImageLabel] = useState("");
+
+  const handleAddImage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newImageUrl.trim()) {
+      toast.error("Please enter an image URL.");
+      return;
+    }
+    try {
+      await addImageMutation.mutateAsync({
+        url: newImageUrl.trim(),
+        caption: newImageLabel.trim(),
+      });
+      toast.success("Image added to TouchDown section!");
+      setNewImageUrl("");
+      setNewImageLabel("");
+    } catch {
+      toast.error("Failed to add image.");
+    }
+  };
+
+  const handleDeleteImage = async (id: bigint) => {
+    try {
+      await deleteImageMutation.mutateAsync(id);
+      toast.success("Image removed.");
+    } catch {
+      toast.error("Failed to delete image.");
+    }
+  };
 
   const filtered = (leads ?? []).filter(([, lead]) => {
     const q = search.toLowerCase();
@@ -1199,126 +1319,252 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-extrabold uppercase tracking-tight text-navy-deep">
-              Submitted Inquiries
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              {leads?.length ?? 0} total lead
-              {(leads?.length ?? 0) !== 1 ? "s" : ""}
-            </p>
-          </div>
-          <Input
-            placeholder="Search by name, email, country..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs h-9 text-sm"
-            data-ocid="admin.search_input"
-          />
-        </div>
+        <Tabs defaultValue="inquiries">
+          <TabsList className="mb-8" data-ocid="admin.tab">
+            <TabsTrigger value="inquiries" data-ocid="admin.inquiries.tab">
+              Client Inquiries
+            </TabsTrigger>
+            <TabsTrigger value="touchdown" data-ocid="admin.touchdown.tab">
+              TouchDown Images
+            </TabsTrigger>
+          </TabsList>
 
-        {isLoading ? (
-          <div className="space-y-3" data-ocid="admin.loading_state">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-12 w-full rounded-lg" />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div
-            className="text-center py-20 rounded-xl border border-dashed border-border bg-white"
-            data-ocid="admin.empty_state"
-          >
-            <p className="text-muted-foreground text-sm">
-              {search
-                ? "No leads match your search."
-                : "No inquiries submitted yet."}
-            </p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl border border-border overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <Table data-ocid="admin.table">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
-                      Lead ID
-                    </TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
-                      Full Name
-                    </TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
-                      Email
-                    </TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
-                      Phone
-                    </TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
-                      Country
-                    </TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
-                      Product
-                    </TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
-                      Message
-                    </TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
-                      Date Submitted
-                    </TableHead>
-                    <TableHead className="w-12" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map(([id, lead], idx) => (
-                    <TableRow
-                      key={id.toString()}
-                      className="hover:bg-band-light/50"
-                      data-ocid={`admin.row.${idx + 1}`}
-                    >
-                      <TableCell className="text-xs text-muted-foreground font-mono">
-                        #{id.toString()}
-                      </TableCell>
-                      <TableCell className="text-xs font-medium text-foreground">
-                        {lead.fullName}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {lead.email}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {lead.phone || "—"}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        <Badge variant="secondary" className="text-[10px]">
-                          {lead.country}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">
-                        {lead.productInterest}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate">
-                        {lead.message || "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                        {formatDate(lead.timestamp)}
-                      </TableCell>
-                      <TableCell>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(id)}
-                          disabled={deleteMutation.isPending}
-                          className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
-                          data-ocid={`admin.delete_button.${idx + 1}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+          {/* ── Client Inquiries Tab ── */}
+          <TabsContent value="inquiries">
+            <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-xl font-extrabold uppercase tracking-tight text-navy-deep">
+                  Submitted Inquiries
+                </h1>
+                <p className="text-muted-foreground text-sm mt-1">
+                  {leads?.length ?? 0} total lead
+                  {(leads?.length ?? 0) !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <Input
+                placeholder="Search by name, email, country..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="max-w-xs h-9 text-sm"
+                data-ocid="admin.search_input"
+              />
             </div>
-          </div>
-        )}
+
+            {isLoading ? (
+              <div className="space-y-3" data-ocid="admin.loading_state">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Skeleton key={i} className="h-12 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div
+                className="text-center py-20 rounded-xl border border-dashed border-border bg-white"
+                data-ocid="admin.empty_state"
+              >
+                <p className="text-muted-foreground text-sm">
+                  {search
+                    ? "No leads match your search."
+                    : "No inquiries submitted yet."}
+                </p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-border overflow-hidden shadow-xs">
+                <div className="overflow-x-auto">
+                  <Table data-ocid="admin.table">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
+                          Lead ID
+                        </TableHead>
+                        <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
+                          Full Name
+                        </TableHead>
+                        <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
+                          Email
+                        </TableHead>
+                        <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
+                          Phone
+                        </TableHead>
+                        <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
+                          Country
+                        </TableHead>
+                        <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
+                          Product
+                        </TableHead>
+                        <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
+                          Message
+                        </TableHead>
+                        <TableHead className="text-xs font-bold uppercase tracking-wide text-navy-deep">
+                          Date Submitted
+                        </TableHead>
+                        <TableHead className="w-12" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filtered.map(([id, lead], idx) => (
+                        <TableRow
+                          key={id.toString()}
+                          className="hover:bg-band-light/50"
+                          data-ocid={`admin.row.${idx + 1}`}
+                        >
+                          <TableCell className="text-xs text-muted-foreground font-mono">
+                            #{id.toString()}
+                          </TableCell>
+                          <TableCell className="text-xs font-medium text-foreground">
+                            {lead.fullName}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {lead.email}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {lead.phone || "—"}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <Badge variant="secondary" className="text-[10px]">
+                              {lead.country}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">
+                            {lead.productInterest}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate">
+                            {lead.message || "—"}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatDate(lead.timestamp)}
+                          </TableCell>
+                          <TableCell>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(id)}
+                              disabled={deleteMutation.isPending}
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
+                              data-ocid={`admin.delete_button.${idx + 1}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── TouchDown Images Tab ── */}
+          <TabsContent value="touchdown">
+            <div className="mb-8">
+              <h1 className="text-xl font-extrabold uppercase tracking-tight text-navy-deep mb-1">
+                TouchDown Images
+              </h1>
+              <p className="text-muted-foreground text-sm">
+                Manage product showcase images displayed in the scrolling
+                marquee.
+              </p>
+            </div>
+
+            {/* Add image form */}
+            <div
+              className="bg-white rounded-xl border border-border p-6 mb-8 shadow-xs"
+              data-ocid="admin.touchdown.panel"
+            >
+              <h2 className="text-sm font-bold uppercase tracking-wide text-navy-deep mb-4">
+                Add New Image
+              </h2>
+              <form
+                onSubmit={handleAddImage}
+                className="flex flex-col sm:flex-row gap-3"
+              >
+                <Input
+                  placeholder="https://example.com/product.jpg"
+                  value={newImageUrl}
+                  onChange={(e) => setNewImageUrl(e.target.value)}
+                  className="flex-1 h-9 text-sm"
+                  data-ocid="admin.touchdown.input"
+                />
+                <Input
+                  placeholder="Product Name"
+                  value={newImageLabel}
+                  onChange={(e) => setNewImageLabel(e.target.value)}
+                  className="w-full sm:w-48 h-9 text-sm"
+                  data-ocid="admin.touchdown.label.input"
+                />
+                <Button
+                  type="submit"
+                  disabled={addImageMutation.isPending}
+                  className="h-9 text-sm"
+                  data-ocid="admin.touchdown.submit_button"
+                >
+                  {addImageMutation.isPending ? (
+                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  ) : null}
+                  Add Image
+                </Button>
+              </form>
+            </div>
+
+            {/* Image grid */}
+            {imagesLoading ? (
+              <div
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                data-ocid="admin.touchdown.loading_state"
+              >
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-52 w-full rounded-xl" />
+                ))}
+              </div>
+            ) : !showcaseImages || showcaseImages.length === 0 ? (
+              <div
+                className="text-center py-20 rounded-xl border border-dashed border-border bg-white"
+                data-ocid="admin.touchdown.empty_state"
+              >
+                <p className="text-muted-foreground text-sm">
+                  No images added yet. Add your first product image above.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {showcaseImages.map(([id, img], idx) => (
+                  <div
+                    key={id.toString()}
+                    className="bg-white rounded-xl border border-border overflow-hidden shadow-xs"
+                    data-ocid={`admin.touchdown.item.${idx + 1}`}
+                  >
+                    <img
+                      src={img.url}
+                      alt={img.caption}
+                      className="w-full h-40 object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src =
+                          "https://placehold.co/300x200/e2e8f0/94a3b8?text=Image+Error";
+                      }}
+                    />
+                    <div className="p-3">
+                      <p className="text-sm font-semibold text-foreground truncate">
+                        {img.caption || "—"}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        {img.url}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteImage(id)}
+                        disabled={deleteImageMutation.isPending}
+                        className="mt-3 w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+                        data-ocid={`admin.touchdown.delete_button.${idx + 1}`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
@@ -1358,6 +1604,7 @@ export default function App() {
         <HeroSection formRef={formRef} />
         <SEOSection />
         <FeaturedProducts />
+        <ProductTouchDown />
         <CommitmentSection />
         <ContactSection />
       </main>

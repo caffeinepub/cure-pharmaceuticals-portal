@@ -17,6 +17,12 @@ export interface LeadInquiry {
     productInterest: string;
     phone: string;
 }
+export type ShowcaseImageId = bigint;
+export interface ShowcaseImage {
+    url: string;
+    caption: string;
+    addedAt: bigint;
+}
 export enum UserRole {
     admin = "admin",
     user = "user",
@@ -34,4 +40,7 @@ export interface backendInterface {
     searchLeads(keyword: string): Promise<Array<[LeadId, LeadInquiry]>>;
     submitInquiry(inquiry: LeadInquiry): Promise<boolean>;
     totalLeadsCount(): Promise<bigint>;
+    addShowcaseImage(url: string, caption: string): Promise<ShowcaseImageId>;
+    getAllShowcaseImages(): Promise<Array<[ShowcaseImageId, ShowcaseImage]>>;
+    deleteShowcaseImage(id: ShowcaseImageId): Promise<void>;
 }

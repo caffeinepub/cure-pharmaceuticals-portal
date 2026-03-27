@@ -15,7 +15,7 @@ actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  // Persistent model
+  // ─── Lead Inquiry ────────────────────────────────────────────────────────
   public type LeadId = Nat;
 
   public type LeadInquiry = {
@@ -28,17 +28,13 @@ actor {
     timestamp : Int;
   };
 
-  // Comparator for sorting leads
   module LeadInquiry {
     public func compare(a : (LeadId, LeadInquiry), b : (LeadId, LeadInquiry)) : Order.Order {
       Int.compare(b.1.timestamp, a.1.timestamp);
     };
   };
 
-  // State
   let leads = Map.empty<LeadId, LeadInquiry>();
-
-  // Functionality
 
   public shared ({ caller }) func submitInquiry(inquiry : LeadInquiry) : async Bool {
     let id = leads.size();
@@ -126,5 +122,39 @@ actor {
       case (null) { Runtime.trap("Lead not found") };
       case (?lead) { lead };
     };
+  };
+
+  // ─── Product Showcase (TouchDown) ────────────────────────────────────────
+  public type ShowcaseImageId = Nat;
+
+  public type ShowcaseImage = {
+    url : Text;
+    caption : Text;
+    addedAt : Int;
+  };
+
+  let showcaseImages = Map.empty<ShowcaseImageId, ShowcaseImage>();
+
+  public shared ({ caller }) func addShowcaseImage(url : Text, caption : Text) : async ShowcaseImageId {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can add showcase images");
+    };
+    let id = showcaseImages.size();
+    showcaseImages.add(id, { url; caption; addedAt = Time.now() });
+    id;
+  };
+
+  public query func getAllShowcaseImages() : async [(ShowcaseImageId, ShowcaseImage)] {
+    showcaseImages.toArray();
+  };
+
+  public shared ({ caller }) func deleteShowcaseImage(id : ShowcaseImageId) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can delete showcase images");
+    };
+    if (not showcaseImages.containsKey(id)) {
+      Runtime.trap("Image not found");
+    };
+    showcaseImages.remove(id);
   };
 };
